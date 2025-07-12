@@ -1,0 +1,13 @@
+name: Take screenshot
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: karol-brejna-i/webpage-screenshot-action@v1
+        with:
+          url: https://google.com
