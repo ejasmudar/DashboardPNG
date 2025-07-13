@@ -7,37 +7,36 @@ import io
 import os
 
 # Constants
-WIDTH, HEIGHT = 800, 600  # Rotate later for landscape
+WIDTH, HEIGHT = 800, 600  # Image canvas in portrait (we rotate later)
 OUTPUT_PATH = "output/calendar.png"
-ICS_URL = os.environ.get("CALENDAR_URL")  # from secrets
+ICS_URL = os.environ.get("CALENDAR_URL")  # Set in GitHub Secrets
+
+# Fonts
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 BOLD_FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+header_font = ImageFont.truetype(BOLD_FONT_PATH, 28)
+date_font = ImageFont.truetype(BOLD_FONT_PATH, 20)
+event_font = ImageFont.truetype(FONT_PATH, 16)
 
-# Create rotated image
+# Create grayscale image
 img = Image.new("L", (HEIGHT, WIDTH), 255)
 draw = ImageDraw.Draw(img)
 
-# Fonts
-header_font = ImageFont.truetype(BOLD_FONT_PATH, 28)
-date_font = ImageFont.truetype(BOLD_FONT_PATH, 20)  # Event name
-event_font = ImageFont.truetype(FONT_PATH, 16)      # Time
-
-# Download ICScalendar_url = os.environ.get("CALENDAR_URL")
-
+# Fetch calendar data
 r = requests.get(ICS_URL)
 calendar = Calendar(r.text)
 
-# Timeframe
+# Dates to display
 today = arrow.now()
-days = [today.shift(days=i).date() for i in range(6)]
+days = [today.shift(days=i) for i in range(6)]  # Keep as Arrow objects
 
-# Header
+# Draw header
 header_text = f"📅 Family Calendar – {today.format('dddd, MMM D')}"
 bbox = draw.textbbox((0, 0), header_text, font=header_font)
-w = bbox[2] - bbox[0]
-draw.text(((HEIGHT - w) // 2, 20), header_text, font=header_font, fill=0)
+header_width = bbox[2] - bbox[0]
+draw.text(((HEIGHT - header_width) // 2, 20), header_text, font=header_font, fill=0)
 
-# Grid layout: 3x2 cards
+# Layout settings
 cols = 3
 rows = 2
 margin = 20
@@ -45,6 +44,7 @@ card_w = (HEIGHT - margin * 2) // cols
 card_h = (WIDTH - margin * 2 - 50) // rows
 pad = 10
 
+# Draw each day's card
 for idx, day in enumerate(days):
     col = idx % cols
     row = idx // cols
@@ -53,15 +53,14 @@ for idx, day in enumerate(days):
     x1 = x0 + card_w - pad
     y1 = y0 + card_h - pad
 
-    # Background card
+    # Card background
     shade = 240 if idx % 2 == 0 else 210
     draw.rounded_rectangle([x0, y0, x1, y1], radius=18, fill=shade)
 
-    # Header
-    weekday = arrow.get(day).format("ddd").upper()
-    date_str = arrow.get(day).format("D MMM")
-    header = f"{weekday} • {date_str}"
-    draw.text((x0 + 12, y0 + 10), header, font=date_font, fill=0)
+    # Date header
+    weekday = day.format("ddd").upper()
+    date_str = day.format("D MMM")
+    draw.text((x0 + 12, y0 + 10), f"{weekday} • {date_str}", font=date_font, fill=0)
 
     # Events
     events = sorted(calendar.timeline.on(day), key=lambda e: e.begin)
@@ -73,7 +72,7 @@ for idx, day in enumerate(days):
             draw.text((x0 + 12, y_cursor), "...", font=event_font, fill=0)
             break
 
-        # Time
+        # Time (smaller & lighter)
         if e.all_day:
             time_str = "📌 All day"
         else:
@@ -81,9 +80,8 @@ for idx, day in enumerate(days):
         draw.text((x0 + 12, y_cursor), time_str, font=event_font, fill=100)
         y_cursor += 16
 
-        # Title
-        name = e.name or "Untitled"
-        name = name.strip().replace("\n", " ")[:30]
+        # Title (bold/dark)
+        name = (e.name or "Untitled").strip().replace("\n", " ")[:30]
         draw.text((x0 + 12, y_cursor), name, font=date_font, fill=0)
         y_cursor += 22
 
