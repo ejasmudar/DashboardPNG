@@ -7,6 +7,9 @@ from PIL import Image, ImageDraw, ImageFont
 import io
 import os
 
+import arrow
+
+
 # Config
 CALENDAR_URL = os.getenv("CALENDAR_URL", "https://example.com/your.ics")
 IMG_WIDTH, IMG_HEIGHT = 600, 800
@@ -27,7 +30,7 @@ except:
     font = ImageFont.load_default()
 
 # Header
-today = datetime.date.today()
+today = arrow.now().floor('day')
 draw.text((20, 10), f"Calendar: {today.strftime('%A, %d %b %Y')}", font=font, fill=0)
 
 # List upcoming events
