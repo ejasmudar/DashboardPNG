@@ -9,58 +9,74 @@ import os
 
 import arrow
 
+# Canvas setup (portrait mode first, rotate later)
+WIDTH, HEIGHT = 600, 800
+MARGIN = 20
+GRID_COLS, GRID_ROWS = 3, 2
+BOX_W = (WIDTH - 2 * MARGIN) // GRID_COLS
+BOX_H = (HEIGHT - MARGIN - 80) // GRID_ROWS  # 80 for header
 
-# Constants
-WIDTH, HEIGHT = 600, 800  # Start in portrait mode, rotate later
-BOX_W, BOX_H = WIDTH // 4, (HEIGHT - 80) // 2
 OUTPUT_PATH = "output/calendar.png"
-FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"  # Use safe fallback
+FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+BOLD_FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+
+# Setup fonts
+header_font = ImageFont.truetype(BOLD_FONT_PATH, 28)
+date_font = ImageFont.truetype(BOLD_FONT_PATH, 20)
+event_font = ImageFont.truetype(FONT_PATH, 16)
 
 # Create canvas
 img = Image.new("L", (WIDTH, HEIGHT), color=255)
 draw = ImageDraw.Draw(img)
 
-# Fonts
-title_font = ImageFont.truetype(FONT_PATH, 28)
-date_font = ImageFont.truetype(FONT_PATH, 18)
-event_font = ImageFont.truetype(FONT_PATH, 16)
-
 # Header
 today = arrow.now()
 header_text = f"Family Calendar – {today.format('dddd, MMM D')}"
-draw.text((20, 20), header_text, font=title_font, fill=0)
+w, _ = draw.textsize(header_text, font=header_font)
+draw.text(((WIDTH - w) // 2, 20), header_text, font=header_font, fill=0)
 
-# Fetch calendar
-url = os.environ.get("CALENDAR_URL")
-calendar = Calendar(requests.get(url).text)
+# Calendar fetch
+calendar_url = os.environ.get("CALENDAR_URL")
+calendar = Calendar(requests.get(calendar_url).text)
 
-# Filter next 8 days
-for i in range(8):
+# Create output folder
+os.makedirs("output", exist_ok=True)
+
+# Draw each day
+for i in range(6):
     day = today.shift(days=i)
     events = list(calendar.timeline.on(day))
 
-    # Box position
-    row = i // 4
-    col = i % 4
-    x0, y0 = col * BOX_W, 80 + row * BOX_H
+    col = i % GRID_COLS
+    row = i // GRID_COLS
+    x0 = MARGIN + col * BOX_W
+    y0 = 80 + row * BOX_H
+    x1 = x0 + BOX_W - 10
+    y1 = y0 + BOX_H - 10
 
-    # Draw rectangle
-    draw.rectangle([x0, y0, x0 + BOX_W, y0 + BOX_H], outline=0)
+    # Background card
+    bg_color = 230 if i % 2 == 0 else 200  # alternating grey shades
+    draw.rounded_rectangle([x0, y0, x1, y1], radius=12, fill=bg_color, outline=80)
 
     # Date header
     date_str = day.format("ddd, MMM D")
-    draw.text((x0 + 5, y0 + 5), date_str, font=date_font, fill=0)
+    draw.text((x0 + 10, y0 + 10), date_str, font=date_font, fill=0)
 
     # Events
-    y_cursor = y0 + 30
-    if events:
-        for e in events[:5]:  # limit lines to avoid overflow
-            time = e.begin.format("HH:mm") if e.begin else ""
-            txt = f"{time} – {e.name}"
-            draw.text((x0 + 8, y_cursor), txt[:28], font=event_font, fill=0)
-            y_cursor += 20
-    else:
-        draw.text((x0 + 8, y_cursor), "(No events)", font=event_font, fill=150)
+    y_cursor = y0 + 35
+    max_lines = 5
+    for e in events[:max_lines]:
+        if e.all_day:
+            time_str = "All day"
+        else:
+            time_str = e.begin.format("HH:mm")
+        line = f"{time_str} – {e.name}"
+        if y_cursor + 20 > y1 - 10:
+            draw.text((x0 + 12, y_cursor), "...", font=event_font, fill=0)
+            break
+        draw.text((x0 + 12, y_cursor), line[:32], font=event_font, fill=0)
+        y_cursor += 20
+
 
 # Rotate for Kindle landscape
 os.makedirs("output", exist_ok=True)
