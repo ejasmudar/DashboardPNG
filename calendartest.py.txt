@@ -1,0 +1,41 @@
+from icalendar import Calendar
+from dateutil.rrule import rrulestr
+import requests
+import datetime
+import pytz
+
+# Load ICS
+ics_url = "https://calendar.google.com/calendar/ical/family09332634814558387020%40group.calendar.google.com/public/basic.ics"
+ical = requests.get(ics_url).text
+cal = Calendar.from_ical(ical)
+
+tz = pytz.timezone("Asia/Kolkata")
+start = datetime.datetime.now(tz)
+end = start + datetime.timedelta(days=9)
+
+event_instances = []
+
+for component in cal.walk():
+    if component.name != "VEVENT":
+        continue
+
+    summary = str(component.get('SUMMARY', 'Untitled'))
+    dtstart = component.get('DTSTART').dt
+    if isinstance(dtstart, datetime.date) and not isinstance(dtstart, datetime.datetime):
+        dtstart = datetime.datetime.combine(dtstart, datetime.time.min).replace(tzinfo=tz)
+
+    rrule_field = component.get('RRULE')
+    if rrule_field:
+        # Convert RRULE field dict to string
+        rrule_str = "RRULE:" + ";".join(f"{k}={','.join(map(str, v))}" for k, v in rrule_field.items())
+        rule = rrulestr(rrule_str, dtstart=dtstart)
+        for occ in rule.between(start, end, inc=True):
+            event_instances.append((occ.astimezone(tz), summary))
+    else:
+        if start <= dtstart <= end:
+            event_instances.append((dtstart.astimezone(tz), summary))
+
+# Sort and print
+event_instances.sort()
+for dt, title in event_instances:
+    print(f"{dt.strftime('%Y-%m-%d %H:%M')} — {title}")
