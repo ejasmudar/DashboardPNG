@@ -1,84 +1,94 @@
-# render_calendar.py
-
 import requests
 import datetime
+import arrow
 from ics import Calendar
 from PIL import Image, ImageDraw, ImageFont
 import io
 import os
 
-import arrow
-
-# Canvas setup (portrait mode first, rotate later)
-WIDTH, HEIGHT = 600, 800
-MARGIN = 20
-GRID_COLS, GRID_ROWS = 3, 2
-BOX_W = (WIDTH - 2 * MARGIN) // GRID_COLS
-BOX_H = (HEIGHT - MARGIN - 80) // GRID_ROWS  # 80 for header
-
+# Constants
+WIDTH, HEIGHT = 800, 600  # Rotate later for landscape
 OUTPUT_PATH = "output/calendar.png"
+ICS_URL = os.environ.get("ICS_URL", "")  # from secrets
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 BOLD_FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
-# Setup fonts
-header_font = ImageFont.truetype(BOLD_FONT_PATH, 28)
-date_font = ImageFont.truetype(BOLD_FONT_PATH, 20)
-event_font = ImageFont.truetype(FONT_PATH, 16)
-
-# Create canvas
-img = Image.new("L", (WIDTH, HEIGHT), color=255)
+# Create rotated image
+img = Image.new("L", (HEIGHT, WIDTH), 255)
 draw = ImageDraw.Draw(img)
 
-# Header
+# Fonts
+header_font = ImageFont.truetype(BOLD_FONT_PATH, 28)
+date_font = ImageFont.truetype(BOLD_FONT_PATH, 20)  # Event name
+event_font = ImageFont.truetype(FONT_PATH, 16)      # Time
+
+# Download ICS
+r = requests.get(ICS_URL)
+calendar = Calendar(r.text)
+
+# Timeframe
 today = arrow.now()
-header_text = f"Family Calendar – {today.format('dddd, MMM D')}"
-w, _ = draw.textsize(header_text, font=header_font)
-draw.text(((WIDTH - w) // 2, 20), header_text, font=header_font, fill=0)
+days = [today.shift(days=i).date() for i in range(6)]
 
-# Calendar fetch
-calendar_url = os.environ.get("CALENDAR_URL")
-calendar = Calendar(requests.get(calendar_url).text)
+# Header
+header_text = f"📅 Family Calendar – {today.format('dddd, MMM D')}"
+bbox = draw.textbbox((0, 0), header_text, font=header_font)
+w = bbox[2] - bbox[0]
+draw.text(((HEIGHT - w) // 2, 20), header_text, font=header_font, fill=0)
 
-# Create output folder
-os.makedirs("output", exist_ok=True)
+# Grid layout: 3x2 cards
+cols = 3
+rows = 2
+margin = 20
+card_w = (HEIGHT - margin * 2) // cols
+card_h = (WIDTH - margin * 2 - 50) // rows
+pad = 10
 
-# Draw each day
-for i in range(6):
-    day = today.shift(days=i)
-    events = list(calendar.timeline.on(day))
-
-    col = i % GRID_COLS
-    row = i // GRID_COLS
-    x0 = MARGIN + col * BOX_W
-    y0 = 80 + row * BOX_H
-    x1 = x0 + BOX_W - 10
-    y1 = y0 + BOX_H - 10
+for idx, day in enumerate(days):
+    col = idx % cols
+    row = idx // cols
+    x0 = margin + col * card_w
+    y0 = 60 + row * card_h
+    x1 = x0 + card_w - pad
+    y1 = y0 + card_h - pad
 
     # Background card
-    bg_color = 230 if i % 2 == 0 else 200  # alternating grey shades
-    draw.rounded_rectangle([x0, y0, x1, y1], radius=12, fill=bg_color, outline=80)
+    shade = 240 if idx % 2 == 0 else 210
+    draw.rounded_rectangle([x0, y0, x1, y1], radius=18, fill=shade)
 
-    # Date header
-    date_str = day.format("ddd, MMM D")
-    draw.text((x0 + 10, y0 + 10), date_str, font=date_font, fill=0)
+    # Header
+    weekday = arrow.get(day).format("ddd").upper()
+    date_str = arrow.get(day).format("D MMM")
+    header = f"{weekday} • {date_str}"
+    draw.text((x0 + 12, y0 + 10), header, font=date_font, fill=0)
 
     # Events
-    y_cursor = y0 + 35
-    max_lines = 5
+    events = sorted(calendar.timeline.on(day), key=lambda e: e.begin)
+    y_cursor = y0 + 40
+    max_lines = 6
+
     for e in events[:max_lines]:
-        if e.all_day:
-            time_str = "All day"
-        else:
-            time_str = e.begin.format("HH:mm")
-        line = f"{time_str} – {e.name}"
-        if y_cursor + 20 > y1 - 10:
+        if y_cursor + 35 > y1 - 10:
             draw.text((x0 + 12, y_cursor), "...", font=event_font, fill=0)
             break
-        draw.text((x0 + 12, y_cursor), line[:32], font=event_font, fill=0)
-        y_cursor += 20
 
+        # Time
+        if e.all_day:
+            time_str = "📌 All day"
+        else:
+            time_str = "🕒 " + e.begin.format("HH:mm")
+        draw.text((x0 + 12, y_cursor), time_str, font=event_font, fill=100)
+        y_cursor += 16
+
+        # Title
+        name = e.name or "Untitled"
+        name = name.strip().replace("\n", " ")[:30]
+        draw.text((x0 + 12, y_cursor), name, font=date_font, fill=0)
+        y_cursor += 22
 
 # Rotate for Kindle landscape
-os.makedirs("output", exist_ok=True)
 img = img.rotate(90, expand=True)
+
+# Ensure output dir
+os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
 img.save(OUTPUT_PATH)
