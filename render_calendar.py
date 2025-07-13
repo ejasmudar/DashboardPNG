@@ -9,7 +9,7 @@ import os
 # Constants
 WIDTH, HEIGHT = 800, 600  # Rotate later for landscape
 OUTPUT_PATH = "output/calendar.png"
-ICS_URL = os.environ.get("ICS_URL", "")  # from secrets
+ICS_URL = os.environ.get("CALENDAR_URL")  # from secrets
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 BOLD_FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
@@ -22,7 +22,8 @@ header_font = ImageFont.truetype(BOLD_FONT_PATH, 28)
 date_font = ImageFont.truetype(BOLD_FONT_PATH, 20)  # Event name
 event_font = ImageFont.truetype(FONT_PATH, 16)      # Time
 
-# Download ICS
+# Download ICScalendar_url = os.environ.get("CALENDAR_URL")
+
 r = requests.get(ICS_URL)
 calendar = Calendar(r.text)
 
