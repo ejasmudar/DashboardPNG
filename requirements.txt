@@ -1,4 +1,5 @@
-ics
-pillow
 requests
-arrow
+pytz
+icalendar
+python-dateutil
+Pillow
