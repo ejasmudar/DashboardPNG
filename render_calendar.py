@@ -63,5 +63,6 @@ for i in range(8):
         draw.text((x0 + 8, y_cursor), "(No events)", font=event_font, fill=150)
 
 # Rotate for Kindle landscape
+os.makedirs("output", exist_ok=True)
 img = img.rotate(90, expand=True)
 img.save(OUTPUT_PATH)
