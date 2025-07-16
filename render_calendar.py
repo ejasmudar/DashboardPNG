@@ -42,6 +42,7 @@ def load_fonts():
 
 # --- Fetch a random blurred background ---
 def get_random_background(width, height):
+    return Image.new("RGBA", (WIDTH, HEIGHT), (255, 255, 255, 255))
     try:
         seed = random.randint(10000, 99999)
         url = f"https://picsum.photos/seed/{seed}/{height}/{width}"
@@ -168,7 +169,17 @@ def generate_calendar_image():
         draw_event_card(img, fonts, day, events, (x0, y0), idx)
 
     os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-    img.save(OUTPUT_PATH)
+
+    # Composite RGBA onto black background to flatten transparency
+    flattened = Image.new("RGB", img.size, (0, 0, 0))
+    flattened.paste(img, mask=img.getchannel("A"))
+
+    # Rotate left 90° (which is 270° clockwise), then convert to grayscale
+    flattened = flattened.rotate(90, expand=True)
+    flattened = flattened.convert("L")  # Ensure grayscale (Kindle-safe)
+
+    # Save to file
+    flattened.save(OUTPUT_PATH)
     print(f"✅ Calendar image saved to {OUTPUT_PATH}")
 
 
